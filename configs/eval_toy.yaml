@@ -1,0 +1,6 @@
+# Example evaluation command encoded as a config note.
+# The current eval script is CLI-first:
+# python scripts/eval_npz.py --features examples/toy_features.npz --reduction pca --samples-per-class 5
+features: examples/toy_features.npz
+reduction: pca
+samples_per_class: 5

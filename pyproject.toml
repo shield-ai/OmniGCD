@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnigcd"
+version = "0.1.0"
+description = "OmniGCD: modality-agnostic zero-shot generalized category discovery"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "OmniGCD authors"}]
+dependencies = [
+  "numpy>=1.23",
+  "pandas>=1.5",
+  "PyYAML>=6.0",
+  "tqdm>=4.65",
+  "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+train = ["torch>=2.1", "torchvision>=0.16", "scikit-learn>=1.3"]
+features = [
+  "timm>=0.9",
+  "transformers>=4.38",
+  "sentence-transformers>=2.6",
+  "datasets>=2.18",
+  "torchaudio>=2.1",
+  "torchgeo>=0.5",
+  "umap-learn>=0.5",
+]
+all = [
+  "torch>=2.1",
+  "torchvision>=0.16",
+  "scikit-learn>=1.3",
+  "timm>=0.9",
+  "transformers>=4.38",
+  "sentence-transformers>=2.6",
+  "datasets>=2.18",
+  "torchaudio>=2.1",
+  "torchgeo>=0.5",
+  "umap-learn>=0.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["omnigcd*"]

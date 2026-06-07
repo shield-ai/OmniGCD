@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Data / generated artifacts
+data/
+features/
+gcd_features/
+checkpoints/*.pt
+checkpoints/*.pth
+checkpoints/*.ckpt
+saved_weights/*.pt
+wandb/
+outputs/
+
+# Notebooks / OS
+.ipynb_checkpoints/
+.DS_Store
+
+# Keep placeholder files if added later
+!checkpoints/.gitkeep
