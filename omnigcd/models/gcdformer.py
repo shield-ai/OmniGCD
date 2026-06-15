@@ -297,12 +297,22 @@ def _build_torch_model():
             """Load either a cleaned checkpoint or a legacy research checkpoint."""
             checkpoint = torch.load(path, map_location=map_location)
 
-            # New/public format saved by `save_checkpoint`.
+            # Public format saved by `save_checkpoint` or by the legacy
+            # conversion script. `architecture` defaults to the cleaned
+            # GCDFormer implementation for checkpoints produced by this class.
             if isinstance(checkpoint, dict) and "config" in checkpoint and "state_dict" in checkpoint:
+                architecture = checkpoint.get("architecture", "gcdformer")
                 config = GCDFormerConfig.from_dict(checkpoint["config"])
-                model = cls(config)
-                model.load_state_dict(checkpoint["state_dict"])
-                return model
+                state_dict = checkpoint["state_dict"]
+                if architecture == "legacy_toymodel":
+                    model = LegacyGCDFormer(config)
+                    model.load_state_dict(state_dict, strict=True)
+                    return model
+                if architecture == "gcdformer":
+                    model = cls(config)
+                    model.load_state_dict(state_dict)
+                    return model
+                raise ValueError(f"Unsupported checkpoint architecture: {architecture}")
 
             # Legacy raw state_dict format from the original research code.
             if isinstance(checkpoint, dict) and "proj.weight" in _strip_compile_prefix(checkpoint):
@@ -314,7 +324,7 @@ def _build_torch_model():
 
             raise ValueError(
                 f"Unsupported checkpoint format for {path}. Expected either "
-                "{'config': ..., 'state_dict': ...} or a legacy raw state_dict."
+                "a public {'config': ..., 'state_dict': ...} checkpoint or a legacy raw state_dict."
             )
 
     return TorchGCDFormer

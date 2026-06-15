@@ -19,6 +19,7 @@ checkpoints/*.pt
 checkpoints/*.pth
 checkpoints/*.ckpt
 !checkpoints/tda2mtv3.pt
+!checkpoints/omnigcd_gcdformer.pt
 saved_weights/*.pt
 wandb/
 outputs/

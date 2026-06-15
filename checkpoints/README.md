@@ -2,16 +2,42 @@
 
 This directory contains released GCDformer checkpoints.
 
-## `tda2mtv3.pt`
+## `omnigcd_gcdformer.pt` (recommended)
 
-`tda2mtv3.pt` is the original GCDformer checkpoint from the research code used for the OmniGCD paper experiments. It is stored in the legacy raw PyTorch state-dict format produced by the original `ToyModel` implementation. The public loader supports this format directly:
+`omnigcd_gcdformer.pt` is the public packaged GCDformer checkpoint. It contains explicit metadata, the inferred model config, and the state dict:
+
+```python
+{
+    "format_version": 1,
+    "architecture": "legacy_toymodel",
+    "config": {...},
+    "state_dict": {...},
+    "metadata": {...},
+}
+```
+
+Load it with:
 
 ```python
 from omnigcd.models import GCDFormer
-model = GCDFormer.load_checkpoint("checkpoints/tda2mtv3.pt", map_location="cpu")
+model = GCDFormer.load_checkpoint("checkpoints/omnigcd_gcdformer.pt", map_location="cpu")
 ```
 
-The checkpoint architecture inferred by the loader is:
+## `tda2mtv3.pt` (legacy source checkpoint)
+
+`tda2mtv3.pt` is the original raw PyTorch state-dict checkpoint from the research code. It is kept for provenance and corresponds to the original model ID used in the development scripts. The public loader supports this raw format directly, but new users should prefer `omnigcd_gcdformer.pt`.
+
+To recreate the packaged checkpoint from the legacy checkpoint:
+
+```bash
+python scripts/convert_legacy_checkpoint.py \
+  --input checkpoints/tda2mtv3.pt \
+  --output checkpoints/omnigcd_gcdformer.pt
+```
+
+## Architecture
+
+Both checkpoint files represent the same trained model. The architecture is:
 
 - input/output latent dimension: 2
 - data token dimension: 224

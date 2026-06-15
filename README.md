@@ -27,7 +27,7 @@
 ---
 
 > [!NOTE]
-> **Code release status.** This repository now contains a clean draft of the OmniGCD code release: GCDformer, synthetic training, zero-shot evaluation from precomputed features, feature-extraction entry points, and the released GCDformer checkpoint at `checkpoints/tda2mtv3.pt`.
+> **Code release status.** This repository now contains a clean draft of the OmniGCD code release: GCDformer, synthetic training, zero-shot evaluation from precomputed features, feature-extraction entry points, and the released GCDformer checkpoint at `checkpoints/omnigcd_gcdformer.pt`.
 
 ## TL;DR
 
@@ -98,7 +98,9 @@ scripts/
 configs/
   train_gcdformer.yaml
 checkpoints/
-  README.md                  # pretrained checkpoint placeholder
+  omnigcd_gcdformer.pt       # released GCDformer checkpoint
+  tda2mtv3.pt                # original legacy checkpoint kept for provenance
+  README.md
 ```
 
 ## Installation
@@ -153,7 +155,7 @@ python scripts/train_gcdformer.py \
   --output checkpoints/gcdformer_synthetic.pt
 ```
 
-The default config is intentionally short for sanity checking. Increase `training.epochs` and `training.steps_per_epoch` for real training. The released paper checkpoint will be provided separately.
+The default config is intentionally short for sanity checking. Increase `training.epochs` and `training.steps_per_epoch` for real training. For paper-style evaluation, use the released checkpoint at `checkpoints/omnigcd_gcdformer.pt`.
 
 Evaluate toy features with a trained checkpoint:
 
@@ -183,7 +185,7 @@ Run zero-shot GCD evaluation:
 ```bash
 python scripts/eval_npz.py \
   --features features/my_dataset_features.npz \
-  --checkpoint checkpoints/tda2mtv3.pt \
+  --checkpoint checkpoints/omnigcd_gcdformer.pt \
   --reduction tsne \
   --latent-dim 2 \
   --samples-per-class 20
@@ -249,7 +251,7 @@ The paper used DOFA for multispectral remote-sensing experiments. This draft rem
 
 ## Notes for reproducing paper numbers
 
-- Use the released paper checkpoint at `checkpoints/tda2mtv3.pt`.
+- Use the released paper checkpoint at `checkpoints/omnigcd_gcdformer.pt`.
 - Use t-SNE reduction (`--reduction tsne --latent-dim 2`) for the main OmniGCD setting.
 - Use the exact dataset splits and samples-per-class values reported in the supplementary material.
 - The provided toy training config is a sanity check, not the final training recipe.
