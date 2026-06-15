@@ -18,6 +18,7 @@ gcd_features/
 checkpoints/*.pt
 checkpoints/*.pth
 checkpoints/*.ckpt
+!checkpoints/tda2mtv3.pt
 saved_weights/*.pt
 wandb/
 outputs/

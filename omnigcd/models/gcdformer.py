@@ -101,6 +101,130 @@ def _build_torch_model():
             x = x + self.mlp(self.norm2(x))
             return x
 
+    class LegacyLabelEmbedding(nn.Module):
+        """Label embedding module matching the original research checkpoint."""
+
+        def __init__(self, dim: int, max_label_id: int) -> None:
+            super().__init__()
+            label_ids = torch.arange(0, max_label_id).unsqueeze(1)
+            frequencies = torch.pow(
+                10000.0,
+                -torch.arange(0, dim, 2, dtype=torch.float32) / dim,
+            )
+            table = torch.zeros(max_label_id, dim, dtype=torch.float32)
+            table[:, 0::2] = torch.sin(label_ids * frequencies)
+            table[:, 1::2] = torch.cos(label_ids * frequencies)
+            self.register_buffer("positional_encodings_table", table, persistent=True)
+
+        def forward(self, labels: torch.Tensor) -> torch.Tensor:
+            labels = labels.clamp(min=0, max=self.positional_encodings_table.shape[0] - 1).long()
+            return self.positional_encodings_table[labels]
+
+    class LegacySelfAttention(nn.Module):
+        """GPT-style non-causal self-attention used in the original code."""
+
+        def __init__(self, d_model: int, n_head: int) -> None:
+            super().__init__()
+            if d_model % n_head != 0:
+                raise ValueError("d_model must be divisible by n_head")
+            self.c_attn = nn.Linear(d_model, 3 * d_model)
+            self.c_proj = nn.Linear(d_model, d_model)
+            self.n_head = n_head
+            self.n_embd = d_model
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            bsz, n_tokens, channels = x.shape
+            qkv = self.c_attn(x)
+            q, k, v = qkv.split(self.n_embd, dim=2)
+            k = k.view(bsz, n_tokens, self.n_head, channels // self.n_head).transpose(1, 2)
+            q = q.view(bsz, n_tokens, self.n_head, channels // self.n_head).transpose(1, 2)
+            v = v.view(bsz, n_tokens, self.n_head, channels // self.n_head).transpose(1, 2)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=False)
+            y = y.transpose(1, 2).contiguous().view(bsz, n_tokens, channels)
+            return self.c_proj(y)
+
+    class LegacyMLP(nn.Module):
+        def __init__(self, d_model: int) -> None:
+            super().__init__()
+            self.c_fc = nn.Linear(d_model, 4 * d_model)
+            self.gelu = nn.GELU(approximate="tanh")
+            self.c_proj = nn.Linear(4 * d_model, d_model)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.c_proj(self.gelu(self.c_fc(x)))
+
+    class LegacyBlock(nn.Module):
+        def __init__(self, d_model: int, n_head: int) -> None:
+            super().__init__()
+            self.ln_1 = nn.LayerNorm(d_model)
+            self.attn = LegacySelfAttention(d_model, n_head)
+            self.ln_2 = nn.LayerNorm(d_model)
+            self.mlp = LegacyMLP(d_model)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = x + self.attn(self.ln_1(x))
+            x = x + self.mlp(self.ln_2(x))
+            return x
+
+    class LegacyGCDFormer(nn.Module):
+        """Compatibility wrapper for the original `ToyModel` checkpoints.
+
+        The released paper checkpoint was produced by the original research code
+        before this repository was cleaned. Those checkpoints are raw state dicts
+        with keys such as ``proj.weight``, ``h.0.attn.c_attn.weight`` and
+        ``final.weight``. This class preserves that architecture while exposing
+        the same public forward API as :class:`TorchGCDFormer`.
+        """
+
+        def __init__(self, config: GCDFormerConfig) -> None:
+            super().__init__()
+            self.config = config
+            self.proj = nn.Linear(config.input_dim, config.data_embed_dim)
+            self.label_embed = LegacyLabelEmbedding(config.label_embed_dim, config.max_label_id)
+            self.mask_embed = nn.Embedding(2, config.label_embed_dim)
+            self.h = nn.ModuleList([LegacyBlock(config.d_model, config.n_head) for _ in range(config.n_layer)])
+            self.final = nn.Linear(config.d_model, config.output_dim)
+            self.cluster_token = nn.Parameter(torch.zeros(1, 1, config.d_model))
+            self.cluster_mlp = nn.Linear(config.d_model, config.max_label_id)
+
+        def forward(self, points: torch.Tensor, labels: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+            x = self.proj(points)
+            mask = mask.long()
+            labels_emb = torch.where((mask == 0).unsqueeze(-1), self.label_embed(labels), self.mask_embed(mask))
+            x = torch.cat([x, labels_emb], dim=-1)
+            x = torch.cat([x, self.cluster_token.expand(x.shape[0], -1, -1)], dim=1)
+            for block in self.h:
+                x = block(x)
+            x = x[:, :-1, :]
+            return self.final(x)
+
+    def _strip_compile_prefix(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        return {k.removeprefix("_orig_mod."): v for k, v in state_dict.items()}
+
+    def _legacy_config_from_state_dict(state_dict: dict[str, torch.Tensor]) -> GCDFormerConfig:
+        state_dict = _strip_compile_prefix(state_dict)
+        input_dim = state_dict["proj.weight"].shape[1]
+        data_embed_dim = state_dict["proj.weight"].shape[0]
+        label_embed_dim = state_dict["mask_embed.weight"].shape[1]
+        output_dim = state_dict["final.weight"].shape[0]
+        d_model = state_dict["final.weight"].shape[1]
+        max_label_id = state_dict["label_embed.positional_encodings_table"].shape[0]
+        layers = [int(k.split(".")[1]) for k in state_dict if k.startswith("h.")]
+        n_layer = max(layers) + 1 if layers else 0
+        # The released paper checkpoint uses 4 heads. The head count cannot be
+        # uniquely inferred from weight shapes, so keep the paper default here.
+        n_head = 4
+        return GCDFormerConfig(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            data_embed_dim=data_embed_dim,
+            label_embed_dim=label_embed_dim,
+            n_layer=n_layer,
+            n_head=n_head,
+            max_label_id=max_label_id,
+            max_sequence_length=3000,
+        )
+
     class TorchGCDFormer(nn.Module):
         def __init__(self, config: GCDFormerConfig) -> None:
             super().__init__()
@@ -169,12 +293,29 @@ def _build_torch_model():
             torch.save({"config": self.config.to_dict(), "state_dict": self.state_dict()}, path)
 
         @classmethod
-        def load_checkpoint(cls, path: str, map_location: str | torch.device = "cpu") -> "TorchGCDFormer":
+        def load_checkpoint(cls, path: str, map_location: str | torch.device = "cpu") -> nn.Module:
+            """Load either a cleaned checkpoint or a legacy research checkpoint."""
             checkpoint = torch.load(path, map_location=map_location)
-            config = GCDFormerConfig.from_dict(checkpoint["config"])
-            model = cls(config)
-            model.load_state_dict(checkpoint["state_dict"])
-            return model
+
+            # New/public format saved by `save_checkpoint`.
+            if isinstance(checkpoint, dict) and "config" in checkpoint and "state_dict" in checkpoint:
+                config = GCDFormerConfig.from_dict(checkpoint["config"])
+                model = cls(config)
+                model.load_state_dict(checkpoint["state_dict"])
+                return model
+
+            # Legacy raw state_dict format from the original research code.
+            if isinstance(checkpoint, dict) and "proj.weight" in _strip_compile_prefix(checkpoint):
+                state_dict = _strip_compile_prefix(checkpoint)
+                config = _legacy_config_from_state_dict(state_dict)
+                model = LegacyGCDFormer(config)
+                model.load_state_dict(state_dict, strict=True)
+                return model
+
+            raise ValueError(
+                f"Unsupported checkpoint format for {path}. Expected either "
+                "{'config': ..., 'state_dict': ...} or a legacy raw state_dict."
+            )
 
     return TorchGCDFormer
 

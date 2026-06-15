@@ -27,7 +27,7 @@
 ---
 
 > [!NOTE]
-> **Code release status.** This repository now contains a clean draft of the OmniGCD code release: GCDformer, synthetic training, zero-shot evaluation from precomputed features, and feature-extraction entry points. The final pretrained GCDformer checkpoint used in the paper will be released separately. Until then, the included training script can train a small synthetic checkpoint for sanity checks; its performance is not expected to match the paper.
+> **Code release status.** This repository now contains a clean draft of the OmniGCD code release: GCDformer, synthetic training, zero-shot evaluation from precomputed features, feature-extraction entry points, and the released GCDformer checkpoint at `checkpoints/tda2mtv3.pt`.
 
 ## TL;DR
 
@@ -183,7 +183,7 @@ Run zero-shot GCD evaluation:
 ```bash
 python scripts/eval_npz.py \
   --features features/my_dataset_features.npz \
-  --checkpoint checkpoints/gcdformer_paper.pt \
+  --checkpoint checkpoints/tda2mtv3.pt \
   --reduction tsne \
   --latent-dim 2 \
   --samples-per-class 20
@@ -249,7 +249,7 @@ The paper used DOFA for multispectral remote-sensing experiments. This draft rem
 
 ## Notes for reproducing paper numbers
 
-- Use the released paper checkpoint once available.
+- Use the released paper checkpoint at `checkpoints/tda2mtv3.pt`.
 - Use t-SNE reduction (`--reduction tsne --latent-dim 2`) for the main OmniGCD setting.
 - Use the exact dataset splits and samples-per-class values reported in the supplementary material.
 - The provided toy training config is a sanity check, not the final training recipe.
